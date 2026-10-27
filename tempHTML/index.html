@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz -- lmao</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    <h2 class="subtitle">{{ subtitle }}</h2>
+    <form id="quiz">
+        {% for q in questions %}
+        {% set qnum = loop.index0 %}
+            <div class="card" data-answer="{{ q.answer }}">
+                <h3>{{ loop.index }}.</h3>
+                <img src="{{ q.gif }}" width="600">
+                {% for line in q.question %}<p class="line">{{ line }}</p>{% endfor %}
+                {% for opt in q.options %}
+                <label class="option"><input type="radio" name="q{{ qnum }}" value="{{ loop.index0 }}">{{ opt }}</label>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    <br>
+    <button type="submit">Check answers</button>
+    </form>
+    <p id="result"></p>
+<script src="script.js"></script>
+</body>
+</html>
