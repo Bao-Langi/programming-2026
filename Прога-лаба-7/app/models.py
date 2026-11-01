@@ -1,4 +1,4 @@
-"""Модели предметной области: User, Currency, Rate."""
+"""Модели предметной области: User, Currency, Subscription, Rate."""
 from __future__ import annotations
 
 import re
@@ -150,6 +150,43 @@ class Currency(BaseEntity):
 
     def __repr__(self) -> str:
         return f"Currency(id={self.id}, code={self.code!r})"
+
+
+class Subscription:
+    """Подписка пользователя на валюту (связь многие-ко-многим)."""
+
+    def __init__(self, user: User, currency: Currency) -> None:
+        if not isinstance(user, User):
+            raise TypeError("user должен быть объектом User")
+        if not isinstance(currency, Currency):
+            raise TypeError("currency должен быть объектом Currency")
+        self._user = user
+        self._currency = currency
+        self._created_at = datetime.now()
+
+    @property
+    def user(self) -> User:
+        return self._user
+
+    @property
+    def currency(self) -> Currency:
+        return self._currency
+
+    @property
+    def key(self) -> tuple[int, int]:
+        """Аналог составного первичного ключа (user_id, currency_id)."""
+        return self.user.id, self.currency.id
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Subscription):
+            return NotImplemented
+        return self.key == other.key
+
+    def __hash__(self) -> int:
+        return hash(self.key)
+
+    def __repr__(self) -> str:
+        return f"Subscription(user_id={self.user.id}, currency_id={self.currency.id})"
 
 
 class Rate:
