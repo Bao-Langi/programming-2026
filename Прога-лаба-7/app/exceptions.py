@@ -19,3 +19,6 @@ class NotFoundError(AppError):
 
 class ProviderError(AppError):
     """Ошибка получения или разбора курсов."""
+
+class InactiveUserError(AppError):
+    """Операция недоступна для неактивного пользователя."""

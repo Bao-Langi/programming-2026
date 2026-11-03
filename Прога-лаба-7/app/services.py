@@ -1,7 +1,7 @@
 """Сервисный слой: регистрация пользователей и управление подписками."""
 from __future__ import annotations
 
-from app.exceptions import DuplicateError, NotFoundError
+from app.exceptions import DuplicateError, InactiveUserError, NotFoundError
 from app.models import Currency, Rate, Subscription, User
 from app.providers import RateProvider
 
@@ -61,7 +61,10 @@ class CurrencyTracker:
 
     # ---------- подписки ----------
     def subscribe(self, user_id: int, code: str) -> Subscription:
-        subscription = Subscription(self.get_user(user_id), self.get_currency(code))
+        user = self.get_user(user_id)
+        if not user.is_active:
+            raise InactiveUserError(f"Пользователь {user.username!r} неактивен")
+        subscription = Subscription(user, self.get_currency(code))
         if subscription in self._subscriptions:
             raise DuplicateError("Подписка уже существует")
         self._subscriptions.add(subscription)
