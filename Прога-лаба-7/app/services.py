@@ -43,8 +43,9 @@ class CurrencyTracker:
         for code, rate in self._provider.get_rates().items():
             if code in self._currencies:
                 self._currencies[code].name = rate.name
+                self._currencies[code].num_code = rate.num_code
             else:
-                self._currencies[code] = Currency(code, rate.name)
+                self._currencies[code] = Currency(code, rate.name, rate.num_code)
                 added += 1
         return added
 

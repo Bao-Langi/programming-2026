@@ -62,9 +62,10 @@ class CbrXmlProvider(RateProvider):
             try:
                 code = valute.findtext("CharCode", "").strip()
                 name = valute.findtext("Name", "").strip()
+                num_code = valute.findtext("NumCode", "").strip() or None
                 nominal = int(valute.findtext("Nominal", "1"))
                 value = Decimal(valute.findtext("Value", "").replace(",", "."))
-                rates[code] = Rate(code, name, nominal, value, on_date)
+                rates[code] = Rate(code, name, nominal, value, on_date, num_code)
             except (ValueError, InvalidOperation):
                 continue  # пропускаем повреждённую запись
         return rates
