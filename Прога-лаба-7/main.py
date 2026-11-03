@@ -26,12 +26,31 @@ def ask_user_id() -> int:
     return int(input("Ваш id: "))
 
 
-def main() -> None:
+def load_tracker() -> CurrencyTracker | None:
+    """Создать трекер и загрузить валюты. При сбое предложить автономный режим."""
     tracker = CurrencyTracker(choose_provider())
     try:
-        print(f"Загружено валют: {tracker.sync_currencies()}")
+        added = tracker.sync_currencies()
     except ProviderError as exc:
-        print(f"{exc}\nЗапустите программу с ключом --offline")
+        # except: сеть недоступна, предлагаем демо-данные
+        print(f"Ошибка: {exc}")
+        if input("Перейти в автономный режим? (y/n): ").strip().lower() != "y":
+            print("Запустите программу с ключом --offline")
+            return None
+        tracker = CurrencyTracker(StaticRateProvider.demo())
+        print(f"Загружено валют (демо): {tracker.sync_currencies()}")
+    else:
+        # else: выполняется только если ошибки не было
+        print(f"Загружено валют: {added}")
+    finally:
+        # finally: выполняется в любом случае
+        print("Синхронизация завершена")
+    return tracker
+
+
+def main() -> None:
+    tracker = load_tracker()
+    if tracker is None:
         return
 
     while True:
@@ -61,6 +80,8 @@ def main() -> None:
                 break
             else:
                 print("Нет такого пункта")
+        except ProviderError as exc:
+            print(f"Ошибка сети: {exc}")
         except AppError as exc:
             print(f"Ошибка: {exc}")
         except ValueError:
