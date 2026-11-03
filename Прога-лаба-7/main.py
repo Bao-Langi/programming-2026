@@ -15,7 +15,6 @@ MENU = """
 0. Выход
 """
 
-
 def choose_provider() -> RateProvider:
     if "--offline" in sys.argv:
         return StaticRateProvider.demo()
