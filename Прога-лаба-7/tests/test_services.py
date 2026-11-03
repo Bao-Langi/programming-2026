@@ -1,7 +1,6 @@
 import pytest
 
-from app.exceptions import AppError, DuplicateError, NotFoundError, ValidationError
-
+from app.exceptions import AppError, DuplicateError, InactiveUserError, NotFoundError, ValidationError
 
 def test_sync_currencies(tracker):
     assert [c.code for c in tracker.currencies] == ["EUR", "JPY", "USD"]
@@ -64,3 +63,11 @@ def test_not_found_is_app_error(tracker, user_id, code):
     tracker.register_user("anna", "a@ex.ru")
     with pytest.raises(AppError):
         tracker.subscribe(user_id, code)
+
+
+def test_inactive_user_cannot_subscribe(tracker):
+    user = tracker.register_user("anna", "a@ex.ru")
+    user.deactivate()
+    with pytest.raises(InactiveUserError):
+        tracker.subscribe(user.id, "USD")
+    assert issubclass(InactiveUserError, AppError)

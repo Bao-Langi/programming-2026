@@ -1,8 +1,7 @@
 import pytest
 
 from app.exceptions import AppError, ValidationError
-from app.models import BaseEntity, Currency, Subscription, User
-
+from app.models import BaseEntity, Currency, Rate, Subscription, User
 
 def test_user_created_with_attributes():
     user = User("ivan", "Ivan@Example.com")
@@ -99,3 +98,42 @@ def test_subscriptions_with_same_pair_are_equal():
 def test_subscription_requires_objects():
     with pytest.raises(TypeError):
         Subscription("anna", "USD")
+
+
+@pytest.mark.parametrize("bad", ["A", "A1", "Иван_Иванов", "x" * 101, "", 123])
+def test_invalid_full_name(bad):
+    with pytest.raises(ValidationError):
+        User("anna", "a@ex.ru", bad)
+
+
+def test_full_name_optional_and_normalized():
+    assert User("anna", "a@ex.ru").full_name is None
+    user = User("anna", "a@ex.ru", "  Анна-Мария Иванова ")
+    assert user.full_name == "Анна-Мария Иванова"
+
+
+def test_is_active_read_only_and_toggle():
+    user = User("anna", "a@ex.ru")
+    assert user.is_active is True
+    with pytest.raises(AttributeError):
+        user.is_active = False
+    user.deactivate()
+    assert user.is_active is False
+    user.activate()
+    assert user.is_active is True
+
+
+def test_currency_num_code():
+    assert Currency("USD", "Доллар США", "840").num_code == "840"
+    assert Currency("USD", "Доллар США").num_code is None
+
+
+@pytest.mark.parametrize("bad", ["84", "8400", "abc"])
+def test_invalid_num_code(bad):
+    with pytest.raises(ValidationError):
+        Currency("USD", "Доллар США", bad)
+
+
+def test_rates_sorted_by_unit_price(rates):
+    ordered = sorted(rates, reverse=True)
+    assert [r.code for r in ordered] == ["EUR", "USD", "JPY"]

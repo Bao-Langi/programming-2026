@@ -62,3 +62,46 @@ def test_any_provider_has_same_interface(make_provider, rates):
     assert provider.get_rate("usd").code == "USD"
     with pytest.raises(NotFoundError):
         provider.get_rate("XXX")
+
+
+BROKEN_XML = """<?xml version="1.0" encoding="windows-1251"?>
+<ValCurs Date="27.10.2026" name="Foreign Currency Market">
+<Valute ID="R01235"><NumCode>840</NumCode><CharCode>USD</CharCode><Nominal>1</Nominal>
+<Name>Доллар США</Name><Value>80,5000</Value></Valute>
+<Valute ID="R99999"><NumCode>999</NumCode><CharCode>BAD</CharCode><Nominal>1</Nominal>
+<Name>Сломанная</Name><Value>abc</Value></Valute>
+</ValCurs>""".encode("windows-1251")
+
+
+def test_cbr_parse_num_code():
+    rates = CbrXmlProvider.parse(SAMPLE_XML)
+    assert rates["USD"].num_code == "840"
+    assert rates["JPY"].num_code == "392"
+
+
+def test_cbr_timeout(monkeypatch):
+    def fake_get(*args, **kwargs):
+        raise requests.Timeout("долго")
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    with pytest.raises(ProviderError, match="не ответил"):
+        CbrXmlProvider().get_rates()
+
+
+def test_skipped_count(monkeypatch):
+    rates, skipped = CbrXmlProvider.parse_with_stats(BROKEN_XML)
+    assert set(rates) == {"USD"}
+    assert skipped == 1
+
+    class FakeResponse:
+        content = BROKEN_XML
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: FakeResponse())
+    provider = CbrXmlProvider()
+    provider.get_rates()
+    assert provider.skipped_count == 1
+    with pytest.raises(AttributeError):
+        provider.skipped_count = 0
