@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
-from app.exceptions import NotFoundError, ProviderError
+from app.exceptions import NotFoundError, ProviderError, ValidationError
 from app.models import Rate
 
 
@@ -39,18 +39,29 @@ class CbrXmlProvider(RateProvider):
     def __init__(self, url: str | None = None, timeout: float | None = None) -> None:
         self._url = url or self.URL
         self._timeout = timeout or self.TIMEOUT
+        self._skipped_count = 0
+
+    @property
+    def skipped_count(self) -> int:
+        """Сколько повреждённых записей пропущено при последнем разборе."""
+        return self._skipped_count
 
     def get_rates(self) -> dict[str, Rate]:
         try:
             response = requests.get(self._url, headers=self.HEADERS, timeout=self._timeout)
             response.raise_for_status()
+        except requests.Timeout as exc:
+            raise ProviderError(
+                f"Сервер ЦБ РФ не ответил за {self._timeout} секунд"
+            ) from exc
         except requests.RequestException as exc:
             raise ProviderError(f"Не удалось получить данные ЦБ РФ: {exc}") from exc
-        return self.parse(response.content)
+        rates, self._skipped_count = self.parse_with_stats(response.content)
+        return rates
 
     @staticmethod
-    def parse(xml_data: bytes) -> dict[str, Rate]:
-        """Разобрать XML ЦБ РФ. Кодировку windows-1251 парсер определит сам."""
+    def parse_with_stats(xml_data: bytes) -> tuple[dict[str, Rate], int]:
+        """Разобрать XML ЦБ РФ. Вернуть курсы и число пропущенных записей."""
         try:
             root = ET.fromstring(xml_data)
             on_date = datetime.strptime(root.attrib["Date"], "%d.%m.%Y").date()
@@ -58,6 +69,7 @@ class CbrXmlProvider(RateProvider):
             raise ProviderError(f"Некорректный ответ ЦБ РФ: {exc}") from exc
 
         rates: dict[str, Rate] = {}
+        skipped = 0
         for valute in root.findall("Valute"):
             try:
                 code = valute.findtext("CharCode", "").strip()
@@ -66,9 +78,14 @@ class CbrXmlProvider(RateProvider):
                 nominal = int(valute.findtext("Nominal", "1"))
                 value = Decimal(valute.findtext("Value", "").replace(",", "."))
                 rates[code] = Rate(code, name, nominal, value, on_date, num_code)
-            except (ValueError, InvalidOperation):
-                continue  # пропускаем повреждённую запись
-        return rates
+            except (ValueError, InvalidOperation, ValidationError):
+                skipped += 1  # повреждённая запись: пропускаем и считаем
+        return rates, skipped
+
+    @staticmethod
+    def parse(xml_data: bytes) -> dict[str, Rate]:
+        """Разобрать XML ЦБ РФ и вернуть только курсы."""
+        return CbrXmlProvider.parse_with_stats(xml_data)[0]
 
 
 class StaticRateProvider(RateProvider):
