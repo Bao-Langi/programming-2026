@@ -28,6 +28,16 @@ class BaseEntity:
         """Сбросить счётчик id. Понадобится в тестах."""
         cls._id_counter = 0
 
+    @classmethod
+    def set_last_id(cls, last_id: int) -> None:
+        """Продолжить нумерацию после последнего выданного id."""
+        cls._id_counter = last_id
+
+    def restore_state(self, entity_id: int, created_at: datetime) -> None:
+        """Восстановить id и дату создания при загрузке из файла."""
+        self.__id = entity_id          # внутри класса, поэтому имя _BaseEntity__id
+        self._created_at = created_at
+
     @property
     def id(self) -> int:
         return self.__id

@@ -71,3 +71,28 @@ def test_inactive_user_cannot_subscribe(tracker):
     with pytest.raises(InactiveUserError):
         tracker.subscribe(user.id, "USD")
     assert issubclass(InactiveUserError, AppError)
+
+def test_save_and_load(tracker, provider, tmp_path):
+    from app.services import CurrencyTracker
+
+    anna = tracker.register_user("anna", "a@ex.ru")
+    tracker.register_user("boris", "b@ex.ru")
+    tracker.subscribe(anna.id, "USD")
+    path = tmp_path / "data.json"
+    tracker.save(path)
+
+    other = CurrencyTracker(provider)
+    other.load(path)
+    assert [u.username for u in other.users] == ["anna", "boris"]
+    assert other.get_user(anna.id).created_at == anna.created_at
+    assert [c.code for c in other.get_user_currencies(anna.id)] == ["USD"]
+    assert other.register_user("clara", "c@ex.ru").id == 3  # нумерация продолжается
+
+
+def test_load_errors(tracker, tmp_path):
+    with pytest.raises(NotFoundError):
+        tracker.load(tmp_path / "missing.json")
+    bad = tmp_path / "bad.json"
+    bad.write_text("не json", encoding="utf-8")
+    with pytest.raises(ValidationError):
+        tracker.load(bad)

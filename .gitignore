@@ -3,3 +3,4 @@
 __pycache__/
 .pytest_cache/
 *.zip
+tracker_data.json

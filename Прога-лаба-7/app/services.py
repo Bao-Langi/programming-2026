@@ -1,7 +1,11 @@
 """Сервисный слой: регистрация пользователей и управление подписками."""
 from __future__ import annotations
 
-from app.exceptions import DuplicateError, InactiveUserError, NotFoundError
+import json
+from datetime import datetime
+from pathlib import Path
+
+from app.exceptions import DuplicateError, InactiveUserError, NotFoundError, ValidationError
 from app.models import Currency, Rate, Subscription, User
 from app.providers import RateProvider
 
@@ -89,3 +93,52 @@ class CurrencyTracker:
     def get_user_rates(self, user_id: int) -> list[Rate]:
         rates = self._provider.get_rates()
         return [rates[c.code] for c in self.get_user_currencies(user_id) if c.code in rates]
+
+    def save(self, path: str | Path) -> None:
+        """Сохранить пользователей, валюты и подписки в JSON-файл."""
+        data = {
+            "users": [u.to_dict() for u in self._users.values()],
+            "currencies": [c.to_dict() for c in self._currencies.values()],
+            "subscriptions": [
+                {"user_id": s.user.id, "code": s.currency.code}
+                for s in self._subscriptions
+            ],
+        }
+        Path(path).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    def load(self, path: str | Path) -> None:
+        """Загрузить данные из JSON-файла. При ошибке текущие данные не меняются."""
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise NotFoundError(f"Файл {str(path)!r} не найден") from None
+        except ValueError as exc:
+            raise ValidationError(f"Файл повреждён: {exc}") from exc
+
+        try:
+            users: dict[int, User] = {}
+            for item in data["users"]:
+                user = User(item["username"], item["email"], item.get("full_name"))
+                user.restore_state(item["id"], datetime.fromisoformat(item["created_at"]))
+                if not item.get("is_active", True):
+                    user.deactivate()
+                users[user.id] = user
+
+            currencies: dict[str, Currency] = {}
+            for item in data["currencies"]:
+                currency = Currency(item["code"], item["name"], item.get("num_code"))
+                currency.restore_state(item["id"], datetime.fromisoformat(item["created_at"]))
+                currencies[currency.code] = currency
+
+            subscriptions = {
+                Subscription(users[item["user_id"]], currencies[item["code"]])
+                for item in data["subscriptions"]
+            }
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValidationError(f"Некорректное содержимое файла: {exc!r}") from exc
+
+        self._users, self._currencies, self._subscriptions = users, currencies, subscriptions
+        User.set_last_id(max(users, default=0))
+        Currency.set_last_id(max((c.id for c in currencies.values()), default=0))
