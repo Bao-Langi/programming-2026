@@ -4,7 +4,7 @@ import pytest
 import requests
 
 from app.exceptions import NotFoundError, ProviderError
-from app.providers import CbrXmlProvider, RateProvider, StaticRateProvider
+from app.providers import CbrJsonProvider, CbrXmlProvider, RateProvider, StaticRateProvider
 
 SAMPLE_XML = """<?xml version="1.0" encoding="windows-1251"?>
 <ValCurs Date="27.10.2026" name="Foreign Currency Market">
@@ -105,3 +105,18 @@ def test_skipped_count(monkeypatch):
     assert provider.skipped_count == 1
     with pytest.raises(AttributeError):
         provider.skipped_count = 0
+
+def test_json_parse():
+    data = {
+        "Date": "2026-10-27T11:30:00+03:00",
+        "Valute": {
+            "JPY": {"NumCode": "392", "CharCode": "JPY", "Nominal": 100,
+                    "Name": "Японских иен", "Value": 53.0},
+            "BAD": {"CharCode": "BAD"},
+        },
+    }
+    rates = CbrJsonProvider.parse(data)
+    assert set(rates) == {"JPY"}
+    assert rates["JPY"].per_unit == Decimal("0.53")
+    with pytest.raises(ProviderError):
+        CbrJsonProvider.parse({})

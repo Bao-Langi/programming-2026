@@ -2,7 +2,7 @@
 import sys
 
 from app.exceptions import AppError, ProviderError
-from app.providers import CbrXmlProvider, RateProvider, StaticRateProvider
+from app.providers import CbrJsonProvider, CbrXmlProvider, RateProvider, StaticRateProvider
 from app.services import CurrencyTracker
 
 MENU = """
@@ -18,6 +18,8 @@ MENU = """
 def choose_provider() -> RateProvider:
     if "--offline" in sys.argv:
         return StaticRateProvider.demo()
+    if "--json" in sys.argv:
+        return CbrJsonProvider()
     return CbrXmlProvider()
 
 

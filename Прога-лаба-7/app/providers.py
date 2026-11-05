@@ -87,6 +87,50 @@ class CbrXmlProvider(RateProvider):
         """Разобрать XML ЦБ РФ и вернуть только курсы."""
         return CbrXmlProvider.parse_with_stats(xml_data)[0]
 
+class CbrJsonProvider(RateProvider):
+    """Курсы ЦБ РФ из JSON (неофициальное зеркало cbr-xml-daily.ru)."""
+
+    URL = "https://www.cbr-xml-daily.ru/daily_json.js"
+    TIMEOUT = 10
+    HEADERS = {"User-Agent": "Mozilla/5.0 (student lab: currency tracker)"}
+
+    def __init__(self, url: str | None = None, timeout: float | None = None) -> None:
+        self._url = url or self.URL
+        self._timeout = timeout or self.TIMEOUT
+
+    def get_rates(self) -> dict[str, Rate]:
+        try:
+            response = requests.get(self._url, headers=self.HEADERS, timeout=self._timeout)
+            response.raise_for_status()
+            data = response.json()
+        except requests.Timeout as exc:
+            raise ProviderError(
+                f"Сервер не ответил за {self._timeout} секунд"
+            ) from exc
+        except (requests.RequestException, ValueError) as exc:
+            raise ProviderError(f"Не удалось получить данные JSON: {exc}") from exc
+        return self.parse(data)
+
+    @staticmethod
+    def parse(data: dict) -> dict[str, Rate]:
+        """Разобрать JSON-ответ зеркала ЦБ РФ."""
+        try:
+            on_date = datetime.fromisoformat(data["Date"]).date()
+            valutes = data["Valute"]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ProviderError(f"Некорректный ответ JSON: {exc}") from exc
+
+        rates: dict[str, Rate] = {}
+        for code, item in valutes.items():
+            try:
+                rates[code] = Rate(
+                    code, item["Name"], int(item["Nominal"]),
+                    Decimal(str(item["Value"])),  # через str, чтобы не тащить ошибку float
+                    on_date, item.get("NumCode"),
+                )
+            except (KeyError, ValueError, TypeError, InvalidOperation, ValidationError):
+                continue  # повреждённую запись пропускаем
+        return rates
 
 class StaticRateProvider(RateProvider):
     """Курсы из заранее заданного списка."""
